@@ -1,0 +1,21 @@
+_notes/
+
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+mutants/
+
+# Packaging
+dist/
+*.egg-info/
+
+# macOS
+.DS_Store
