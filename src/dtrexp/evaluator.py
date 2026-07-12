@@ -88,7 +88,7 @@ def _selector_covers(sel: Selector, f: Fields, has_w: bool) -> bool:
         if f.weekday != weekday:
             return False
         pos, length = _scope_pos(sel.scope, f)
-        if ordinal > 0:
+        if ordinal >= 1:  # ordinal is never 0 (grammar: nonzero integer)
             return (pos - 1) // 7 + 1 == ordinal
         return (length - pos) // 7 + 1 == -ordinal
     v, lo, hi = _field_and_domain(sel, f)
@@ -132,16 +132,23 @@ def _window_end(start: datetime, cadence: Cadence) -> datetime:
     return start + timedelta(minutes=n)
 
 
+def _as_utc(dt: datetime) -> datetime:
+    # astimezone to any FIXED-offset representation preserves the instant, and
+    # timedelta arithmetic on fixed offsets is absolute — UTC is chosen for
+    # clarity, not correctness.
+    return dt.astimezone(timezone.utc)  # pragma: no mutate — any fixed target is equivalent
+
+
 def _cadence_covers(c: Cadence, local: datetime, instant: datetime, tz: str) -> bool:
     unit = c.period_unit
-    if unit in "Hm":
+    if unit in ("H", "m"):
         # Absolute elapsed time (spec §9.3); anchor resolved with fold=0
         # (earlier occurrence in overlaps; resolves forward through gaps).
         # The grid arithmetic MUST run in UTC: same-zone aware arithmetic in
         # Python is wall-clock, which would drift the grid across DST shifts.
         if instant.tzinfo is None:
             instant = instant.replace(tzinfo=timezone.utc)
-        anchor_abs = c.anchor.replace(tzinfo=_zone(tz)).astimezone(timezone.utc)
+        anchor_abs = _as_utc(c.anchor.replace(tzinfo=_zone(tz)))
         period = timedelta(hours=c.period) if unit == "H" else timedelta(minutes=c.period)
         elapsed = instant - anchor_abs
         if elapsed < timedelta(0):
@@ -151,7 +158,7 @@ def _cadence_covers(c: Cadence, local: datetime, instant: datetime, tz: str) -> 
         # previous window always ends at or before this one's start).
         start = anchor_abs + (elapsed // period) * period
         return start <= instant < _window_end(start, c)
-    if unit in "DW":
+    if unit in ("D", "W"):
         step_days = c.period * (7 if unit == "W" else 1)
         # k0 is a date-difference floor, so the k0 occurrence may still start
         # later in the day than `local` — probe one occurrence back; k0 + 1

@@ -34,7 +34,7 @@ class Expression:
         self.branches = branches
         self.warnings = warnings
 
-    def covers(self, instant: datetime | str, tz: str = "UTC") -> bool:
+    def covers(self, instant: datetime | str, tz: str = "UTC") -> bool:  # pragma: no mutate — default pinned by test_covers_tz_default_is_utc; mutmut's trampoline forwards args, making a mutated default unreachable
         """Is the absolute ``instant`` inside the covered set, evaluated in ``tz``?"""
         if isinstance(instant, str):
             instant = datetime.fromisoformat(instant)

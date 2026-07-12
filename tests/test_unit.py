@@ -581,3 +581,4 @@ def test_hourly_cadence_grid_immune_to_host_timezone(monkeypatch):
     finally:
         monkeypatch.undo()
         time.tzset()
+

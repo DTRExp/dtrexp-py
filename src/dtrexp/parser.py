@@ -106,7 +106,7 @@ def _scan_cadence_tail(anchor: _DateLit, s: str, j: int) -> tuple[Cadence, int]:
         dur_n, dur_u, j = num_unit(dur_pos)
         if dur_n == 0:
             raise Err("cadence duration must be >= 1", dur_pos)
-    if dur_u in "YM" and per_u not in "YM":
+    if dur_u in ("Y", "M") and per_u not in ("Y", "M"):
         raise Err("month/year duration unit requires a month/year period", dur_pos)
     if dur_u == per_u:
         ok = dur_n < per_n

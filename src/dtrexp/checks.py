@@ -100,7 +100,7 @@ def _possible_domain_sizes(sel: Selector, by_desig: dict[str, Selector]) -> tupl
 
 
 def _satisfiable(sel: Selector, lo: int, hi: int) -> bool:
-    if sel.kind in ("all", "ordinal"):
+    if sel.kind in ("all", "ordinal"):  # pragma: no mutate — pure fast path: both kinds have empty .items, so the exclusion formula below computes the same True
         return True
     if sel.kind == "stride":
         st = sel.stride
@@ -133,7 +133,7 @@ def static_warnings(branch: Branch) -> list[DTRExpWarning]:
         sizes = _possible_domain_sizes(sel, by_desig)
         if not sizes:
             continue
-        lo = 0 if sel.designator in "Hms" else 1
+        lo = 0 if sel.designator in ("H", "m", "s") else 1
         if not any(_satisfiable(sel, lo, hi) for hi in sizes):
             warnings.append(DTRExpWarning(
                 f"statically unsatisfiable: the '{sel.designator}' component can never match "
