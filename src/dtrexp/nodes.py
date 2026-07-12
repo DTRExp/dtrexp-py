@@ -1,4 +1,4 @@
-"""AST nodes for parsed DTRExp expressions."""
+"""AST nodes for parsed DTR expressions."""
 
 from __future__ import annotations
 

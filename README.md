@@ -25,11 +25,11 @@ Python 3.11+, stdlib only (`zoneinfo` for IANA zones).
 from datetime import datetime, timezone
 import dtrexp
 
-expr = dtrexp.parse("T0900:1800 E1:5")   # business hours, Mon–Fri
+dtr = dtrexp.parse("T0900:1800 E1:5")   # business hours, Mon–Fri
 
-expr.covers(datetime(2026, 7, 7, 10, 0, tzinfo=timezone.utc))
+dtr.covers(datetime(2026, 7, 7, 10, 0, tzinfo=timezone.utc))
 # —> True (UTC — the default)
-expr.covers(datetime(2026, 7, 7, 7, 30, tzinfo=timezone.utc), tz="Europe/Berlin")
+dtr.covers(datetime(2026, 7, 7, 7, 30, tzinfo=timezone.utc), tz="Europe/Berlin")
 # —> True (09:30 Berlin local time)
 ```
 
@@ -51,7 +51,7 @@ res.warnings                      # (DTRExpWarning(message="unsatisfiable …", 
 
 - `parse(text)` raises `DTRExpSyntaxError` (a `ValueError`) on invalid input; *position* points at the offending character and is appended to the rendered message.
 - `validate(text)` never raises; typo-shaped input comes back as data. Returns a frozen `ValidationResult` with *valid* `bool`, *errors* (parsing stops at the first syntax error, so at most one) and *warnings*.
-- Warnings are the spec's §9.1 unsatisfiability lint — expressions that parse but can never match. They are `DTRExpWarning` objects (*message* `str`, *position* `int | None`); `str(warning)` is the message. `Expression.warnings` and `validate(text).warnings` carry the same content.
+- Warnings are the spec's [§9.1](https://github.com/DTRExp/dtrexp/blob/main/spec.md#91-the-existence-rule) unsatisfiability lint — expressions that parse but can never match. They are `DTRExpWarning` objects (*message* `str`, *position* `int | None`); `str(warning)` is the message. `Expression.warnings` and `validate(text).warnings` carry the same content.
 
 ## Conformance & quality
 
@@ -63,6 +63,7 @@ res.warnings                      # (DTRExpWarning(message="unsatisfiable …", 
 
 - [**dtrexp** (spec)][spec] — the DTRExp specification (grammar, semantics, conformance vectors) this package implements.
 - [**dtrexp-js**][js] — the reference implementation; adds `intersect`, `next`, `describe`, `toRRule` and canonicalization.
+- [**dtrexp-go**][go] · [**dtrexp-swift**][swift] · [**dtrexp-rs**][rs] · [**dtrexp-java**][java] — the other ports; same core interface.
 
 ## License
 
@@ -70,5 +71,9 @@ res.warnings                      # (DTRExpWarning(message="unsatisfiable …", 
 
 [spec]: https://github.com/DTRExp/dtrexp
 [js]: https://github.com/DTRExp/dtrexp-js
+[go]: https://github.com/DTRExp/dtrexp-go
+[swift]: https://github.com/DTRExp/dtrexp-swift
+[rs]: https://github.com/DTRExp/dtrexp-rs
+[java]: https://github.com/DTRExp/dtrexp-java
 [vectors]: https://github.com/DTRExp/dtrexp/blob/main/vectors.json
 [vectors-md]: https://github.com/DTRExp/dtrexp/blob/main/VECTORS.md
