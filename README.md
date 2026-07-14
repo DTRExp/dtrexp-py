@@ -35,7 +35,7 @@ dtr.covers(datetime(2026, 7, 7, 7, 30, tzinfo=timezone.utc), tz="Europe/Berlin")
 
 Note that you parse **once** (at write/config time) and evaluate **many**; `Expression` objects are immutable, and `covers` is a single calendar-field extraction followed by integer comparisons (no occurrence iteration). The zone is an evaluation parameter, never part of the expression. `covers` also accepts an ISO 8601 string for the instant.
 
-## Errors and warnings
+## Errors and Warnings
 
 Both carry a **position**; the 0-based character offset into the source:
 
@@ -53,13 +53,13 @@ res.warnings                      # (DTRExpWarning(message="unsatisfiable …", 
 - `validate(text)` never raises; typo-shaped input comes back as data. Returns a frozen `ValidationResult` with *valid* `bool`, *errors* (parsing stops at the first syntax error, so at most one) and *warnings*.
 - Warnings are the spec's [§9.1](https://github.com/DTRExp/dtrexp/blob/main/spec.md#91-the-existence-rule) unsatisfiability lint: expressions that parse but can never match. They are `DTRExpWarning` objects (*message* `str`, *position* `int | None`); `str(warning)` is the message. `Expression.warnings` and `validate(text).warnings` carry the same content.
 
-## Conformance & quality
+## Conformance & Quality
 
 - The test suite is driven by the shared [`vectors.json`][vectors] from the spec repo (draft 2.8): every coverage, rejection, warning and quiet vector, including the calendar traps (Feb 29 across 2000/2024/**2100**, `W53` existence, DST gap/overlap in `Europe/Berlin`). See [VECTORS.md][vectors-md] for how the suite works.
 - 100% line + branch coverage, enforced (`uv run poe cover`); mutation-tested with mutmut (`uv run poe mutation`).
 - Zero dependencies.
 
-## Related projects
+## Related Projects
 
 - [**dtrexp** (spec)][spec]: the DTRExp specification (grammar, semantics, conformance vectors) this package implements.
 - [**dtrexp-js**][js]: the reference implementation; adds `intersect`, `next`, `describe`, `toRRule` and canonicalization.
