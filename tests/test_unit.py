@@ -185,6 +185,20 @@ def test_syntax_error_without_position_renders_bare_message():
         ("T0900 T1000", "duplicate designator 'T'", 6),
         ("20260101 20270101", "at most one bounds component", 9),
         ("20260101/2D 20270101/2D", "at most one cadence", 12),
+        # date-literal scanning — field slices and time-part bounds
+        ("202613019", r"'20261301' is not a real calendar date", 0),
+        ("20260101T0900123", "malformed date literal at position 15", 15),
+        ("20260101T0060", "invalid time part in date literal", 0),
+        ("20260101T2400", "invalid time part in date literal", 0),
+        ("20260101T000060", "invalid time part in date literal", 0),
+        # datelike '*'/':' boundary handling
+        ("*:", "malformed date literal at position 2", 2),
+        ("20260101:", "malformed date literal at position 9", 9),
+        # cadence duration/period conservative check — positions and units
+        ("20260101/1D", "cadence duration must be conservatively smaller", 9),
+        ("20260101/1D/1Y", "month/year duration unit requires a month/year period", 12),
+        ("20260101/1Y/12M", "cadence duration must be conservatively smaller", 12),
+        ("20260101/1D/24H", "cadence duration must be conservatively smaller", 12),
     ],
 )
 def test_invalid_error_messages(expression, match, pos):
@@ -582,3 +596,303 @@ def test_hourly_cadence_grid_immune_to_host_timezone(monkeypatch):
         monkeypatch.undo()
         time.tzset()
 
+
+
+# ---------------------------------------------------------------------------
+# Mutation-pass kills: exact messages, exact positions, boundary behavior.
+# The substring-matching table above cannot see message rewording or position
+# slips; these tables assert the whole rendered error. Parametrize ids stay
+# ASCII (the expression), never the message — see test_vectors._ascii_id.
+
+_T_SELECTOR_ERRORS = [
+    ("T", "designator 'T' without value (at 0)"),
+    ("T*", "T takes no '*' — only values, ranges and lists (at 1)"),
+    ("T0900/2/2", "T takes no stride — only values, ranges and lists (at 5)"),
+    ("T0900#2", "T takes no ordinal — only values, ranges and lists (at 5)"),
+    ("T-0900", "T takes no negative value — only values, ranges and lists (at 1)"),
+    (
+        "T005960",
+        "second out of range in time value "
+        "(leap seconds are not representable) (at 1)",
+    ),
+    ("T0060", "minute out of range in time value (at 1)"),
+    ("T24", "hour 24 is written exactly '2400', and only as a range end (at 1)"),
+    ("T25", "hour out of range in time value (at 1)"),
+]
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    _T_SELECTOR_ERRORS,
+    ids=[e for e, _ in _T_SELECTOR_ERRORS],
+)
+def test_time_selector_exact_error_messages(expression, message):
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse(expression)
+    assert str(ei.value) == message
+
+
+def test_time_range_endpoint_error_positions():
+    # a bad range start is positioned at the range start
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse("T2500:0900")
+    assert "hour out of range" in str(ei.value)
+    assert ei.value.position == 1
+    # a bad range end is positioned just after 'HHMM:'
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse("T0900:2500")
+    assert "hour out of range" in str(ei.value)
+    assert ei.value.position == 6
+
+
+def test_bare_2400_is_rejected_only_a_range_end_may_use_it():
+    with pytest.raises(DTRExpSyntaxError, match="hour 24 is written exactly '2400'"):
+        dtrexp.parse("T2400")
+
+
+def test_millisecond_time_value_requires_seconds():
+    with pytest.raises(DTRExpSyntaxError, match="malformed time value '1230.500'"):
+        dtrexp.parse("T1230.500")
+
+
+def test_time_value_accepts_boundary_minute_and_second():
+    assert dtrexp.parse("T0959").covers(datetime(2026, 1, 1, 9, 59, 0, tzinfo=timezone.utc)) is True
+    assert (
+        dtrexp.parse("T093059").covers(datetime(2026, 1, 1, 9, 30, 59, tzinfo=timezone.utc)) is True
+    )
+
+
+def test_midnight_wrap_range_covers_exact_midnight():
+    expr = dtrexp.parse("T2200:0600")
+    assert expr.covers(datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)) is True
+    assert expr.covers(datetime(2026, 1, 1, 5, 0, 0, tzinfo=timezone.utc)) is True
+    assert expr.covers(datetime(2026, 1, 1, 23, 0, 0, tzinfo=timezone.utc)) is True
+    assert expr.covers(datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)) is False
+
+
+_VALIDATION_ERRORS = [
+    ("Y-1", "negative value on Y — no edge to count back from", 0),
+    ("M-13", "value -13 out of domain for 'M' (-12..-1)", 0),
+    ("Y2030:2020", "backwards range on Y — no edge to wrap around", 0),
+    ("Y2030:2020/2", "backwards range on Y — no edge to wrap around", 0),
+    ("M5:2/2", "wrap ranges take no stride", 0),
+    (
+        "M1/20",
+        "stride interval 20 exceeds the parent domain size (12) — use a date-anchored cadence",
+        0,
+    ),
+    # stride-branch endpoint domain checks carry the selector position
+    ("M13/2", "value 13 out of domain for 'M' (1-12)", 0),
+    ("M1:13/2", "value 13 out of domain for 'M' (1-12)", 0),
+]
+
+
+@pytest.mark.parametrize(
+    ("expression", "message", "pos"),
+    _VALIDATION_ERRORS,
+    ids=[e for e, _, _ in _VALIDATION_ERRORS],
+)
+def test_validation_exact_error_message_and_position(expression, message, pos):
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse(expression)
+    assert str(ei.value) == f"{message} (at {pos})"
+    assert ei.value.position == pos
+
+
+def test_exclusion_value_out_of_domain_is_rejected():
+    with pytest.raises(DTRExpSyntaxError, match=r"value 13 out of domain for 'M'") as ei:
+        dtrexp.parse("M!13")
+    assert ei.value.position == 0
+
+
+def test_range_endpoints_out_of_domain_are_positioned():
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse("M13:20")  # range start out of domain
+    assert ei.value.position == 0
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse("M1:20")  # range end out of domain
+    assert ei.value.position == 0
+
+
+def test_equal_endpoint_year_range_is_accepted():
+    # start == end is a one-year range, not a backwards wrap.
+    assert dtrexp.validate("Y2020:2020").valid is True
+
+
+def test_wrap_range_stride_with_end_at_domain_low_rejected():
+    # end == lo is still an in-domain wrap range; a stride on it is rejected.
+    with pytest.raises(DTRExpSyntaxError, match="wrap ranges take no stride") as ei:
+        dtrexp.parse("M5:1/2")
+    assert ei.value.position == 0
+
+
+def test_single_value_stride_range_is_accepted():
+    # start == end (a one-value range) carries a stride without error.
+    assert dtrexp.validate("M2:2/2").valid is True
+
+
+def test_stride_interval_equal_to_domain_size_is_accepted():
+    assert dtrexp.validate("M1/12").valid is True
+
+
+def test_stride_interval_just_over_domain_size_is_rejected():
+    with pytest.raises(DTRExpSyntaxError, match="stride interval 13 exceeds the parent domain size") as ei:
+        dtrexp.parse("M1/13")
+    assert ei.value.position == 0
+
+
+def test_backwards_year_stride_uses_year_lower_bound():
+    # The Y lower bound (1) gates the in-domain wrap test for Y strides.
+    with pytest.raises(DTRExpSyntaxError, match="backwards range on Y") as ei:
+        dtrexp.parse("Y5:1/2")
+    assert ei.value.position == 0
+
+
+_STRUCTURE_ERRORS = [
+    ("", "empty expression (at 0)"),
+    ("M1|", "empty union branch (at 3)"),
+    ("M1,*", "bare '*' in a list — the list is already the whole domain (at 3)"),
+    ("20260101:20250101", "backwards bounds range (at 0)"),
+    ("20260101 20270101", "at most one bounds component per expression (at 9)"),
+    ("20260101/2D 20270101/2D", "at most one cadence per expression (at 12)"),
+    ("T0900 T1000", "duplicate designator 'T' in one expression (at 6)"),
+    ("MQ1", "designator 'M' without value (at 0)"),
+    # a third union branch: its absolute start offset must keep accumulating
+    ("M1|M2|M13", "value 13 out of domain for 'M' (1-12) (at 6)"),
+]
+
+
+@pytest.mark.parametrize(
+    ("expression", "rendered"),
+    _STRUCTURE_ERRORS,
+    ids=[e if e else "empty" for e, _ in _STRUCTURE_ERRORS],
+)
+def test_structure_error_message_exact(expression, rendered):
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse(expression)
+    assert str(ei.value) == rendered
+
+
+def test_parse_non_string_message_exact():
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse(123)  # type: ignore[arg-type]
+    assert str(ei.value) == "expression must be a string"
+    assert ei.value.position is None
+
+
+def test_parse_branch_empty_expression_message_and_position():
+    # Direct call reaches _parse_branch's own empty guard; it renders with the
+    # exact text and position == the branch start (the default 0).
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        _parse_branch("   ")
+    assert str(ei.value) == "empty expression (at 0)"
+
+
+def test_date_literal_time_bounds_accept_maxima():
+    # mi=59 and ss=59 are valid, not rejected as out of range.
+    assert dtrexp.parse("20260101T0059").covers(datetime(2026, 1, 1, 0, 59, 30, tzinfo=timezone.utc)) is True
+    expr = dtrexp.parse("20260101T000059")
+    assert expr.covers(datetime(2026, 1, 1, 0, 0, 59, tzinfo=timezone.utc)) is True
+    assert expr.covers(datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)) is False
+
+
+def test_date_literal_seconds_bounds_range():
+    # A ':' bounds range following a full T-literal with seconds parses cleanly.
+    expr = dtrexp.parse("20260101T090059:20260301")
+    assert expr.covers(datetime(2026, 2, 1, tzinfo=timezone.utc)) is True
+
+
+def test_open_ended_upper_bounds():
+    # 'date:*' is a lower-bounded, open-ended window.
+    expr = dtrexp.parse("20260101:*")
+    assert expr.covers(datetime(2027, 1, 1, tzinfo=timezone.utc)) is True
+    assert expr.covers(datetime(2025, 1, 1, tzinfo=timezone.utc)) is False
+
+
+def test_open_ended_upper_bounds_then_selector():
+    # The scan resumes at the right offset after 'date:*', so a following selector parses.
+    expr = dtrexp.parse("20260101:*M1")
+    assert expr.covers(datetime(2027, 1, 15, tzinfo=timezone.utc)) is True
+    assert expr.covers(datetime(2027, 2, 15, tzinfo=timezone.utc)) is False
+
+
+_CADENCE_BOUNDS_ERRORS = [
+    ("20260101/", "malformed cadence — expected <n><unit> with unit in Y M W D H m"),
+    ("20260101/0D", "cadence period must be >= 1"),
+    ("20260101/1D/0D", "cadence duration must be >= 1"),
+    ("20260101/1D/1M", "month/year duration unit requires a month/year period"),
+    (
+        "20260101/1D/1D",
+        "cadence duration must be conservatively smaller than the period "
+        "(duration x max unit length < period x min unit length)",
+    ),
+    ("*", "a bare '*' component is not valid — bounds need a ':' range"),
+    (
+        "*:*",
+        "bounds require at least one date-literal endpoint — "
+        "an unbounded window is spelled by omitting bounds",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("expression", "message"),
+    _CADENCE_BOUNDS_ERRORS,
+    ids=[e for e, _ in _CADENCE_BOUNDS_ERRORS],
+)
+def test_cadence_bounds_error_message_exact(expression, message):
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse(expression)
+    assert ei.value.args[0] == message
+
+
+_SELECTOR_ERRORS = [
+    ("M1!2", "exclusion '!' is valid only immediately after the designator", 2),
+    ("M!1!2", "exclusion '!' is valid only immediately after the designator", 3),
+    ("M1!2!3", "exclusion '!' is valid only immediately after the designator", 2),
+    ("M1.5", "'.' is valid only inside T literals", 2),
+    ("M1.2.3", "'.' is valid only inside T literals", 2),
+    ("M!1/2", "a component is either an exclusion or carries a stride — never both", 3),
+    ("M!1/2/3", "a component is either an exclusion or carries a stride — never both", 3),
+    ("M!1#2", "ordinal '#' cannot combine with exclusion", 3),
+    ("M!1#2#3", "ordinal '#' cannot combine with exclusion", 3),
+    ("M!13", "value 13 out of domain for 'M' (1-12)", 0),
+    ("M1#2#3", "ordinal '#' is valid only on E, not 'M'", 2),
+    ("E1,2#1", "ordinal takes a single weekday value and a single ordinal", 1),
+    ("E--1#1", "malformed weekday '--1'", 1),
+    ("E1#--1", "malformed ordinal '--1'", 3),
+    ("E1#0", "ordinal zero", 3),
+    ("E1#6", "ordinal out of range (-5..-1, 1..5)", 3),
+    ("M1/2/1/1", "too many '/' parts in stride", 1),
+    ("M1,2/3", "stride not allowed on a list", 2),
+    ("M1,2,3/4", "stride not allowed on a list", 2),
+    ("M1/-2", "stride interval/duration must be positive integers", 3),
+    ("M*:5/2", "anchorless stride — an explicit range start is required", 1),
+    ("M-1:5/2", "stride start must be non-negative (end-relative anchors shift per parent instance)", 1),
+    ("M1-2:5/2", "malformed stride start '1-2'", 1),
+    ("M1:2-3/2", "malformed stride end '2-3'", 3),
+    ("M/2", "anchorless stride — an explicit start is required", 1),
+    ("M*/2", "anchorless stride — an explicit start is required", 1),
+    ("M-1/2", "stride start must be non-negative (end-relative anchors shift per parent instance)", 1),
+    ("M1-2/2", "malformed stride start '1-2'", 1),
+    ("M1/1", "stride interval must be >= 2", 3),
+    ("M1/3/3", "stride duration must be >= 1 and < interval", 5),
+]
+
+
+@pytest.mark.parametrize(
+    ("expression", "message", "pos"),
+    _SELECTOR_ERRORS,
+    ids=[e for e, _, _ in _SELECTOR_ERRORS],
+)
+def test_selector_error_message_and_position_exact(expression, message, pos):
+    with pytest.raises(DTRExpSyntaxError) as ei:
+        dtrexp.parse(expression)
+    assert ei.value.args[0] == message
+    assert ei.value.position == pos
+
+
+def test_weekday_negative_seven_lower_bound_is_inclusive():
+    # -7 is in domain (maps to weekday 1, Monday); the check is `-7 <= w`, not `-7 < w`.
+    expr = dtrexp.parse("E-7#1")
+    assert expr.covers(datetime(2026, 8, 3, tzinfo=timezone.utc)) is True  # first Monday of Aug 2026
