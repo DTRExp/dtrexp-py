@@ -21,6 +21,14 @@ from dtrexp import DTRExpSyntaxError
 
 VECTORS = json.loads((Path(__file__).parent / "vectors.json").read_text())
 
+
+def _ascii_id(reason: str) -> str:
+    """Parametrize IDs must stay ASCII: pytest escapes non-ASCII IDs, and the
+    escaped form cannot be re-selected by a second in-process ``pytest.main``
+    run in the same interpreter — which is exactly how mutmut drives its
+    mutant workers."""
+    return reason.replace("—", "-").replace("…", "...")
+
 _coverage_cases = [
     (group["id"], group["expression"], group["tz"], instant, expected)
     for group in VECTORS["coverage"]
@@ -41,7 +49,7 @@ def test_coverage(gid, expression, tz, instant, expected):
 @pytest.mark.parametrize(
     ("expression", "reason"),
     [(v["expression"], v["reason"]) for v in VECTORS["invalid"]],
-    ids=[v["reason"] for v in VECTORS["invalid"]],
+    ids=[_ascii_id(v["reason"]) for v in VECTORS["invalid"]],
 )
 def test_invalid(expression, reason):
     with pytest.raises(DTRExpSyntaxError):
