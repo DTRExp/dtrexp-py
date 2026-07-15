@@ -1,6 +1,6 @@
 [project]
 name = "dtrexp"
-version = "0.1.0"
+version = "1.0.0"
 description = "DTRExp — Date-Time Range & Recurrence Expression: parsing, validation and coverage evaluation (spec draft 2.8)"
 readme = "README.md"
 requires-python = ">=3.11"
