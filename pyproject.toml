@@ -1,12 +1,17 @@
 [project]
 name = "dtrexp"
-version = "1.0.0"
+version = "1.0.1"
 description = "DTRExp — Date-Time Range & Recurrence Expression: parsing, validation and coverage evaluation (spec draft 2.8)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Onur Yıldırım", email = "onur@cutepilot.com" }]
 dependencies = []
+
+[project.urls]
+Homepage = "https://dtrexp.org"
+Repository = "https://github.com/DTRExp/dtrexp-py"
+Specification = "https://dtrexp.org/spec/"
 
 [dependency-groups]
 dev = [
