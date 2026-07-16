@@ -1,4 +1,4 @@
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="./.github/logo-dark.svg"><img src="./.github/logo.svg" width="200" alt="dtrexp-py" /></picture></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DTRExp/dtrexp-py/main/.github/logo-dark.svg"><img src="https://raw.githubusercontent.com/DTRExp/dtrexp-py/main/.github/logo.svg" width="200" alt="dtrexp-py" /></picture></p>
 
 # dtrexp-py
 
