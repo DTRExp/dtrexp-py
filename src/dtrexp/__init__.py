@@ -1,4 +1,4 @@
-"""dtrexp — DTRExp (Date-Time Range & Recurrence Expression) draft 2.8.
+"""dtrexp — DTRExp (Date-Time Range & Recurrence Expression) draft 2.9.
 
 Parsing/validation and coverage evaluation only::
 

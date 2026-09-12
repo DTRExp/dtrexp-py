@@ -1,4 +1,4 @@
-"""Parser and static validation for DTRExp draft 2.8."""
+"""Parser and static validation for DTRExp draft 2.9."""
 
 from __future__ import annotations
 
