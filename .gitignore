@@ -19,3 +19,6 @@ dist/
 
 # macOS
 .DS_Store
+
+# Scratch and the latest test reports (coverage, mutation), never committed
+_backup/
